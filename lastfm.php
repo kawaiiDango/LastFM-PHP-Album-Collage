@@ -45,11 +45,10 @@
 
  */
 //Grabs the query included in the URL.
-
 include('config.inc.php');
-include('vendor/autoload.php');
+//include('vendor/autoload.php');
 include('lib/Utils.php');
-
+/*
 use Aws\S3\S3Client;
 use Aws\S3\Exception\S3Exception;
 use Aws\Sns\SnsClient;
@@ -57,11 +56,12 @@ use Aws\Sqs\SqsClient;
 
 use Doctrine\Common\Cache\FilesystemCache;
 use Guzzle\Cache\DoctrineCacheAdapter;
-
+*/
 mb_internal_encoding("UTF-8");
 
-$util = new Utils();
+$utils = new Utils();
 
+/*
 if(!isset($config))
 {
   //if not defined, use Environment variables
@@ -74,37 +74,33 @@ $cache = new DoctrineCacheAdapter(new FilesystemCache('/tmp/cache'));
 $s3 = S3Client::factory(array(
       'credentials.cache' => $cache,
       'region' => 'eu-west-1'));
-
+*/
 //Get localhost
 $url = "http://".$_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI'];
 $url = substr($url, strpos($url, '?')+1);
-
 //Parses the $vars and assigns the values as in the URL. $name and $period expected here.
-parse_str($url);
-$request['user'] = trim($user);
-$request['period'] = $period;
-$request['cols'] = $cols;
-$request['rows'] = $rows;
-$plays = isset($playcount) && $playcount == 1;
-$albumInfo = isset($info) && $info == 1;
+parse_str($url, $request);
+$request['user'] = trim($request['user']);
 
 $limit = $request['cols'] * $request['rows'] + 15;
-$bucket = $config['bucket'];
+//$bucket = $config['bucket'];
 
 //If Configuration isn't defined, throw and error and exit
+/*
 if(empty($config['bucket']) && empty($config['api_key']))
 {
   error_log("Configuration not defined, check environment variables or config.inc.php");
   die();
 }
+
 //S3 Key.
 $key = 'images/'.$request['user'].'-'.$request['period'].'.jpg';
-
+*/
 //Define Lastfm API calls
-$lastfmApi = "http://ws.audioscrobbler.com/2.0/?method=user.gettopalbums&user=".$request['user']."&period=".$request['period']."&api_key=".$config['api_key']."&limit=$limit&format=json";
+
+
 $validUser = "http://ws.audioscrobbler.com/2.0/?method=user.getinfo&user=".$request['user']."&api_key=".$config['api_key']."&format=json";
 
-//Check if a valid user
 $infoJson = json_decode($utils->getJson($validUser, new Curl()));
 
 //If an error is thrown, generate an error image and exit
@@ -113,6 +109,7 @@ if(isset($infoJson->{"error"}))
   header("Content-Type: image/png");
   error_log($infoJson->{"message"}." - ".$request['user']);
   imagepng(errorImage($infoJson->{"message"}));
+  /*
   $sns = SnsClient::factory(array(
         'credentials.cache' => $cache,
         'region' => 'eu-west-1'));
@@ -121,11 +118,38 @@ if(isset($infoJson->{"error"}))
         'Message' => $infoJson->{"message"}." - ".$request['user'],
         'Subject' => "Lastfm Error: ".$infoJson->{"error"}
         ));
+        */
   return;
 }
 
+if (isset($request['artist']) && $request['artist'] == 1){
+  $internalDurations = array("overall" => "ALL", "7day" => "LAST_7_DAYS", "1month" => "LAST_30_DAYS", "3month" => "LAST_90_DAYS", "6month" => "LAST_180_DAYS", "12month" => "LAST_365_DAYS");
+
+  $lastfmApi = "https://www.last.fm/user/".$request['user']."/library/artists?date_preset=".$internalDurations[$request['period']];
+}
+else
+  $lastfmApi = "http://ws.audioscrobbler.com/2.0/?method=user.gettopalbums&user=".$request['user']."&period=".$request['period']."&api_key=".$config['api_key']."&limit=$limit&format=json";
+
+
 //Get User's albums and generate a MD5 hash based on this
 $json = $utils->getJson($lastfmApi, new Curl());
+if ($limit>50){
+    $marker = 'Artists Scrobbled';
+    $markerPos = strpos($json, $marker);
+    $marker = 'metadata-display">';
+    $markerPos = strpos($json, $marker, $markerPos+strlen($marker));
+    if ($markerPos){
+        $artistCount = substr($json, $markerPos+strlen($marker), 
+            strpos($json,"<",$markerPos+strlen($marker)) - $markerPos-strlen($marker));
+        $artistCount = (int)str_replace(",", "", $artistCount);
+
+        for ($i=2; $i<=3 && ($i-1)*50<=$artistCount; $i++){
+            $json .= $utils->getJson($lastfmApi."&page=".$i, new Curl());
+        }
+    }
+}
+
+/*
 $sns = SnsClient::factory(array(
     'credentials.cache' => $cache,
     'region' => 'eu-west-1'));
@@ -134,10 +158,11 @@ $sns->publish(array(
     'Message' => $json,
     'Subject' => $user."s JSON API Call"
 ));
+*/
 $jsonhash = md5($json);
 
 //Cache based on user set variables and JSON hash
-$filename = "images/$user.$period.$rows.$cols.$albumInfo.$plays.$jsonhash";
+$filename = "images/".$request['user'].$request['period'].$request['rows'].$request['cols'].$request['info'].$request['playcount'].$jsonhash;
 
 //if a previous file exists - request is cached, serve from cache and exit
 if(file_exists($filename))
@@ -149,20 +174,25 @@ if(file_exists($filename))
 }
 
 //otherwise carry on and getAlbums from LastFM.
-$albums = $utils->getAlbums(json_decode($json));
+if (isset($request['artist']) && $request['artist'] == 1){
+    $covers = $utils->getArtArtist($json, 3);
+} else {
+    $albums = $utils->getAlbums(json_decode($json));
+    $covers = $utils->getArt($albums, 3);
+}
 //Pass the Albums to getArt to download the art into a $covers array
-$covers = $utils->getArt($albums, 3);
 
 //From the covers array, create a collage while passing user variables required
-$image = $utils->createCollage($covers, 3, 0, $cols, $rows, $albumInfo, $plays);
-//Output HTTP ContentType header.
+$image = $utils->createCollage($covers, 3, 0, $request['cols'], $request['rows'], isset($request['info']) && $request['info'] == 1, isset($request['playcount']) && $request['playcount'] == 1);
+
+// Output HTTP ContentType header.
 header("Content-Type: image/jpeg");
 //Output image on stdout.
-imagejpeg($image, NULL, 100);
+imagejpeg($image, null, 88);
 //Save image to local filesystem as cache
-imagejpeg($image, $filename, 100);
-
+// imagejpeg($image, $filename, 100);
 //After output, save image to S3 for static content
+/*
 $result = $s3->putObject(array(
       'Bucket'      => $bucket,
       'Key'        => strtolower($key),
@@ -171,9 +201,9 @@ $result = $s3->putObject(array(
       'ContentType'    => 'image/jpeg',
       'CacheControl'  =>  'max-age=16400'
       ));
-
+*/
 //delete file
-unlink($filename);
+//unlink($filename);
 //Free resources
 imagedestroy($image);
 ?>

@@ -12,21 +12,9 @@ if(isset($_SERVER['HTTP_REFERER'])){
 <html lang="en">
 
 <head>
-<meta name="google-site-verification" content="-KVdJ1exOkKJOnzSebdMNGStyc68M8s7p09zpb-Lfk0" />
-<meta property="fb:admins" content="1370840827" />
 <title>Paddez</title>
 <link rel="stylesheet" href="https://static.paddez.com/style.css" type="text/css" media="screen" />
 <link rel="SHORTCUT ICON" href="https://static.paddez.com/images/faviocon.ico">
-<script>
-(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
- (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
- m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
- })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-
-ga('create', 'UA-48104767-1', 'paddez.com');
-ga('send', 'pageview');
-
-</script>
 <style>
 
 img{
@@ -61,18 +49,19 @@ src="https://static.paddez.com/misc/github-banner.png" alt="Fork me on GitHub" d
 <div class="image" style="max-width: 1200px;">
 <?php 
 if(isset($_POST['name']) && isset($_POST['period']) && isset($_POST['width']) || !empty($_POST)){
-//	echo "<a href=\"http://".$_SERVER['SERVER_NAME'].$_SERVER['REQUEST_URI']."lastfm.php?user=".$_POST['name']."&period=".$_POST['period']."&cols=".$_POST['width']."&rows=".$_POST['len']."&info=".$_POST['info']."\">\n";
-	echo '<a href="http://content.paddez.com/images/'.strtolower($_POST['name']).'-'.$_POST['period'].'.jpg">';	
-	echo "<img src=\"http://".$_SERVER['SERVER_NAME'].$_SERVER['REQUEST_URI']."lastfm.php?user=".$_POST['name']."&period=".$_POST['period']."&cols=".$_POST['width']."&rows=".$_POST['len']."&info=".$_POST['info']."&playcount=".$_POST['playcount']."\"></img></a>\n";
+	// echo '<a href="http://content.paddez.com/images/'.strtolower($_POST['name']).'-'.$_POST['period'].'.jpg">';	
+	echo "<img src=\"lastfm.php?user=".$_POST['name']."&period=".$_POST['period']."&cols=".$_POST['width']."&rows=".$_POST['len']."&info=".$_POST['info']."&playcount=".$_POST['playcount']."&artist=".$_POST['artist']."\"></img>";
+	//"</a>\n";
 }
 else {
 	echo "<img src=\"https://static.paddez.com/images/notload.gif\"></img>\n";
 }
-
+/*
 if(!empty($_POST)){
 	$link = 'http://content.paddez.com/images/'.strtolower($_POST['name']).'-'.$_POST['period'].'.jpg';
 	echo "<p>Static Link: <a href=\"$link\">$link</a> </p>";
 }
+*/
 ?>
 </div>
 </section>
@@ -123,14 +112,20 @@ for($x=4; $x<=13; $x++){
 </td>
 </tr>
 <tr>
-<td class="label"> Album Captions: </td>
+<td class="label"> Artists Collage: </td>
 <td>
-<input type="checkbox" name="info" value="1">
+<input type="checkbox" name="artist" value="1" checked>
+</td>
+</tr>
+<tr>
+<td class="label"> Captions: </td>
+<td>
+<input type="checkbox" name="info" value="1" checked>
 </td>
 </tr>
 <td class="label"> Playcount: </td>
 <td>
-<input type="checkbox" name="playcount" value="1">
+<input type="checkbox" name="playcount" value="1" checked>
 </td>
 </tr>
 </table>
@@ -160,16 +155,6 @@ than 200 results :(, 13 is the maximum for now</p>
 <p>If you run into any issues - shout at me [dave@paddez.com].</p>
 <p>PS: Hi /mu/ <3 </p>
 
-<script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
-<!-- LastFM -->
-<ins class="adsbygoogle"
-     style="display:block"
-	      data-ad-client="ca-pub-9409020946760752"
-		       data-ad-slot="9934699476"
-			        data-ad-format="auto"></ins>
-					<script>
-					(adsbygoogle = window.adsbygoogle || []).push({});
-					</script>
 </section>
 </div>
 </footer>

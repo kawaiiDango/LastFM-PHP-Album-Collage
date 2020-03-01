@@ -33,8 +33,9 @@ class Utils {
     return ($response);
   }
   //Tested
-  function getImages($coverUrls)
+  function getImages($coverUrls, $max)
   {
+
     /*
       This method uses parallel cURL's to speed up downloads.
     */
@@ -44,6 +45,7 @@ class Utils {
     $running = null;
     $mhandler = curl_multi_init();
     $counter = 0;
+    $coverUrls = array_slice($coverUrls, 0, $max);
     foreach($coverUrls as $url)
     {
       $chs[$counter] = curl_init($url['url']);
@@ -65,12 +67,13 @@ class Utils {
     foreach($chs as $ch)
     {
       $images[$counter]['data'] = curl_multi_getcontent($ch);
-      $images[$counter] = $coverUrls[$counter];
+      
+      $images[$counter] += $coverUrls[$counter];
       curl_multi_remove_handle($mhandler, $ch);
       $counter++;
     }
-
     curl_multi_close($mhandler);
+    
     return $images;
   }
 
@@ -104,32 +107,38 @@ class Utils {
 
     $counter = 1;
     //Grab images with cURL method.
-    $images = Utils::getImages($covers);
+    $images = Utils::getImages($covers, $rows * $cols);
 
     //For each image returned, create image object and write text
     foreach($images as $rawdata)
     {
-      error_log("Album Processing: ".$rawdata['artist']." - ".$rawdata['album']);
+      
       $image = imagecreatefromstring($rawdata['data']);
       if($albumInfo || $playcount)
       {
-        $font = "../resources/NotoSansCJK-Regular.ttc";
+
+        $font = "resources/NotoSansCJK-Regular.ttc";
         $white = imagecolorallocate($image, 255, 255, 255);
         $black = imagecolorallocate($image, 0, 0, 0);
+        $offset = 0;
         if($albumInfo && $playcount)
         {
-          imagettfstroketext($image, 10, 0, 5, 20, $white, $black, $font, $rawdata['artist'], 1);
-          imagettfstroketext($image, 10, 0, 5, 32, $white, $black, $font, $rawdata['album'], 1);
-          imagettfstroketext($image, 10, 0, 5, 44, $white, $black, $font, "Plays: ".$rawdata['playcount'], 1);
+          if (isset($rawdata['artist']))
+            $this->imagettfstroketext($image, 10, 0, 5, 20 + ($offset++ * 15), $white, $black, $font, $rawdata['artist'], 2);
+          if(isset($rawdata['album']))
+            $this->imagettfstroketext($image, 10, 0, 5, 20 + ($offset++ * 15), $white, $black, $font, $rawdata['album'], 2);
+          $this->imagettfstroketext($image, 10, 0, 5, 20 + ($offset++ * 15), $white, $black, $font, $rawdata['playcount']." plays", 2);
         }
         elseif($albumInfo)
         {
-          imagettfstroketext($image, 10, 0, 5, 20, $white, $black, $font, $rawdata['artist'], 1);
-          imagettfstroketext($image, 10, 0, 5, 32, $white, $black, $font, $rawdata['album'], 1);
+          if (isset($rawdata['artist']))
+            $this->imagettfstroketext($image, 10, 0, 5, 20 + ($offset++ * 15), $white, $black, $font, $rawdata['artist'], 2);
+          if(isset($rawdata['album']))
+            $this->imagettfstroketext($image, 10, 0, 5, 20 + ($offset++ * 15), $white, $black, $font, $rawdata['album'], 2);
         }
         elseif($playcount)
         {
-          imagettfstroketext($image, 10, 0, 5, 20, $white, $black, $font, "Plays: ".$rawdata['playcount'], 1);
+          $this->imagettfstroketext($image, 10, 0, 5, 20, $white, $black, $font, $rawdata['playcount']." plays", 2);
         }
       }
 
@@ -137,11 +146,10 @@ class Utils {
 
       //Increase X coords each time
       $coords['x'] += $pixels;
-
       //If we've hit the side of the image, move down and reset x position.
-      if($i % $cols == 0)
+      if($counter % $cols == 0)
       {
-        $coords['y'] += 300;
+        $coords['y'] += $pixels;
         $coords['x'] = 0;
       }
 
@@ -156,9 +164,11 @@ class Utils {
     /*
       Function to add shadow to text.
     */
-    for($c1 = ($xSize-abs($pixels)); $c1 <= ($xSize+abs($pixels)); $c1++)
-      for($c2 = ($ySize-abs($pixels)); $c2 <= ($ySize+abs($pixels)); $c2++)
+    for($c1 = ($xSize-abs($pixels)); $c1 <= ($xSize+abs($pixels)); $c1++){
+      for($c2 = ($ySize-abs($pixels)); $c2 <= ($ySize+abs($pixels)); $c2++){
         imagettftext($image, $size, $angle, $c1, $c2, $strokecolor, $fontfile, $text);
+      }
+    }
     return imagettftext($image, $size, $angle, $xSize, $ySize, $textcolor, $fontfile, $text);
   }
 
@@ -196,13 +206,66 @@ class Utils {
     return $artUrl;
   }
 
+  function getArtArtist($html, $quality)
+  {
+    global $request;
+    /*
+       0 = Low (34)
+       1 = Medium (64s)
+       2 = Large (126)
+       3 = xlarge (300)
+     */
+    $i = 0;
+    $artUrl = null;
+
+    $dom = new DOMDocument();
+    $dom->loadHTML($html);
+    $dom->preserveWhiteSpace = false;
+    $finder = new DomXPath($dom);
+    $classname="chartlist-image";
+    $nodes = $finder->query("//*[contains(concat(' ', normalize-space(@class), ' '), ' $classname ')]");
+    foreach($nodes as $imageNode) {
+      $imgUrl = $imageNode->firstChild->nextSibling->firstChild->nextSibling->getAttribute("src");
+      if($quality > 2)
+        $imgUrl = str_replace("avatar70s", "avatar300s", $imgUrl);
+      else if($quality > 1)
+        $imgUrl = str_replace("avatar70s", "avatar170s", $imgUrl);
+      
+      $nameNode = $imageNode->nextSibling->nextSibling;
+      $artistName = trim($nameNode->textContent);
+
+      $countNode = $nameNode->nextSibling->nextSibling->nextSibling->nextSibling;
+      $playCount = explode(" ", trim($countNode->textContent))[0];
+
+      if(strpos($imgUrl, "2a96cbd8b46e442fc41c2b86b821562f")){
+        error_log('No album art for - ' . $artistName);
+        continue;
+      }
+      $artUrl[$i]['artist'] = $artistName;
+      $artUrl[$i]['mbid'] = "";
+      $artUrl[$i]['playcount'] = $playCount;
+      $artUrl[$i]['url'] = $imgUrl;
+      $artUrl[$i]['user'] = $request['user'];
+      $i++;
+    }
+
+    return $artUrl;
+  }
   static function getAlbums($json)
   {
     if(is_object($json->{'topalbums'}))
       return $json->{'topalbums'}->{'album'};
+    if(is_object($json->{'topartists'}))
+      return $json->{'topartists'}->{'artist'};
     return null;
   }
 
+  static function getArtists($json)
+  {
+    if(is_object($json->{'topartists'}))
+      return $json->{'topartists'}->{'artist'};
+    return null;
+  }
   static function errorImage($message)
   {
     $xSize = 500;
